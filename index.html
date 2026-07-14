@@ -1,0 +1,423 @@
+<!DOCTYPE html>                      <!-- #Hier beginnt die komplette Seite -->
+<html lang="de">                        <!-- Das ist ein Kommentar -->
+
+<head>            <!-- Informationen über die Seite -->
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>OSM Explorer</title>
+
+    <!-- Leaflet CSS -->
+<link rel="stylesheet"
+      href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+
+#map{
+
+    height:600px;
+
+}
+
+body{
+
+    font-family: Arial, Helvetica, sans-serif;
+
+    margin:20px;
+
+    background:#f5f5f5;
+
+}
+
+#header{
+
+    background:white;
+
+    padding:20px;
+
+    border-radius:12px;
+
+    margin-bottom:20px;
+
+    box-shadow:0 2px 10px rgba(0,0,0,0.15);
+
+}
+
+#header h1{
+
+    margin:0;
+
+    color:#1565C0;
+
+}
+
+#header p{
+
+    margin-top:10px;
+
+    font-size:18px;
+
+    color:#444;
+
+}
+
+#header small{
+
+    color:#777;
+
+}
+
+#restaurantContainer{
+
+    background:white;
+
+    margin-top:20px;
+
+    padding:20px;
+
+    border-radius:12px;
+
+    box-shadow:0 2px 10px rgba(0,0,0,0.15);
+
+}
+
+#restaurantContainer h2{
+
+    margin-top:0;
+
+    color:#1565C0;
+
+}
+
+#restaurantList{
+
+    padding-left:22px;
+
+}
+
+#restaurantList li{
+
+    margin-bottom:8px;
+
+}
+
+#infoBox{
+
+    background:white;
+
+    margin-bottom:20px;
+
+    padding:20px;
+
+    border-radius:12px;
+
+    box-shadow:0 2px 10px rgba(0,0,0,0.15);
+
+}
+
+#infoBox h2{
+
+    margin-top:0;
+
+    color:#1565C0;
+
+}
+
+#infoBox ul{
+
+    margin-bottom:0;
+
+    padding-left:22px;
+
+}
+
+#infoBox li{
+
+    margin-bottom:8px;
+
+}
+
+</style>
+
+
+</head>
+
+<body>              <!-- Alles was der Benutzer später sieht, wird hier eingefügt -->
+
+<div id="header">
+
+    <h1>🗺️ OSM Explorer</h1>
+
+    <p>
+        Restaurants in deiner Umgebung mit OpenStreetMap finden
+    </p>
+
+    <small>
+        GeoIT-Projekt – Berliner Hochschule für Technik
+    </small>
+
+</div>
+
+<div id="infoBox">
+
+    <h2>ℹ️ Informationen</h2>
+
+    <p>
+        Willkommen beim OSM Explorer!
+    </p>
+
+    <ul>
+
+        <li>Klicke auf eine beliebige Stelle der Karte.</li>
+
+        <li>Es werden Restaurants im Umkreis von 500 Metern gesucht.</li>
+
+        <li>Der grüne Marker zeigt deine Auswahl.</li>
+
+        <li>Die blauen Marker zeigen die gefundenen Restaurants.</li>
+
+        <li>Klicke auf einen Restaurantnamen in der Liste, um dorthin zu zoomen.</li>
+
+        <li>Die Entfernung wird in Metern angezeigt.</li>
+
+    </ul>
+
+</div>
+
+    <div id="map"></div>
+
+    <div id="restaurantContainer">
+
+    <h2>📍 Gefundene Restaurants</h2>
+
+    <ul id="restaurantList">
+
+        <li>Noch keine Restaurants gesucht.</li>
+
+    </ul>
+
+</div>
+
+<!-- Leaflet JavaScript -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+
+let marker;
+
+let restaurantMarkers = [];
+
+let selectedRestaurantMarker = null;
+
+const greenIcon = L.icon({
+    iconUrl: "marker-icon-green.png",
+
+    shadowUrl: "marker-shadow.png",
+
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+const redIcon = L.icon({
+
+    iconUrl: "marker-icon-red.png",
+
+    shadowUrl: "marker-shadow.png",
+
+    iconSize: [25, 41],
+
+    iconAnchor: [12, 41],
+
+    popupAnchor: [1, -34],
+
+    shadowSize: [41, 41]
+
+});
+
+function sucheRestaurants(lat, lon){
+
+    const restaurantList = document.getElementById("restaurantList");
+
+restaurantList.innerHTML = "";
+
+
+    console.log("Restaurantsuche gestartet");
+
+    const radius = 500;
+
+    const query = `
+[out:json];
+
+node
+["amenity"="restaurant"]
+(around:${radius},${lat},${lon});
+
+out;
+`;
+
+    console.log(query);
+
+    fetch("https://overpass-api.de/api/interpreter", {
+
+    method: "POST",
+
+    body: query
+
+})
+.then(response => response.json())
+
+.then(data => {
+
+    const restaurantList = document.getElementById("restaurantList");
+
+restaurantList.innerHTML = "";
+
+        restaurantMarkers.forEach(function(marker){
+
+    map.removeLayer(marker);
+
+});
+
+restaurantMarkers = [];
+
+    console.log(data);
+
+    console.log("Restaurants gefunden:");
+
+    console.log(data.elements.length);
+
+    console.log(data.elements);
+
+    if(data.elements.length === 0){
+
+    marker
+        .bindPopup(
+            "Im Umkreis von 500 Metern wurden keine Restaurants gefunden."
+        )
+        .openPopup();
+
+}else{
+
+    marker
+        .bindPopup(
+            data.elements.length + " Restaurants im Umkreis von 500 Metern gefunden."
+        )
+        .openPopup();
+
+}
+    
+    data.elements.sort(function(a, b){
+
+    const nameA = a.tags.name || "Unbekanntes Restaurant";
+    const nameB = b.tags.name || "Unbekanntes Restaurant";
+
+    return nameA.localeCompare(nameB, "de");
+
+});
+
+    data.elements.forEach(function(restaurant){
+
+        let restaurantMarker = L.marker([
+    restaurant.lat,
+    restaurant.lon
+])
+.addTo(map)
+.bindPopup(
+    restaurant.tags.name || "Unbekanntes Restaurant"
+);
+
+restaurantMarkers.push(restaurantMarker);
+
+let entfernung = map.distance(
+    marker.getLatLng(),
+    restaurantMarker.getLatLng()
+);
+
+let listItem = document.createElement("li");
+
+let name =
+    restaurant.tags.name || "Unbekanntes Restaurant";
+
+listItem.textContent =
+    name + " (" + Math.round(entfernung) + " m)";
+
+restaurantList.appendChild(listItem);
+
+listItem.style.cursor = "pointer";
+
+listItem.onclick = function(){
+
+    if(selectedRestaurantMarker){
+
+        selectedRestaurantMarker.setIcon(new L.Icon.Default());
+
+    }
+
+    restaurantMarker.setIcon(redIcon);
+
+    selectedRestaurantMarker = restaurantMarker;
+
+    map.flyTo(
+        restaurantMarker.getLatLng(),
+        17
+    );
+
+    restaurantMarker.openPopup();
+
+};
+
+    });
+
+})
+
+.catch(error => {
+
+    console.log("Fehler:");
+
+    console.log(error);
+
+    marker
+        .bindPopup(
+            "Die Restaurants konnten gerade nicht geladen werden. Bitte einige Sekunden warten und erneut versuchen."
+        )
+        .openPopup();
+
+});
+
+}
+
+const map = L.map('map').setView([52.5200, 13.4050], 13);
+
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+
+    attribution: '&copy; OpenStreetMap contributors'
+
+}).addTo(map);
+
+map.on('click', function(e){
+
+    if(marker){
+
+        map.removeLayer(marker);
+
+    }
+
+marker = L.marker(e.latlng, {
+    icon: greenIcon
+})
+    .addTo(map)
+    .bindPopup("Restaurants werden gesucht...")
+    .openPopup();
+
+    sucheRestaurants(e.latlng.lat, e.latlng.lng);
+
+});
+
+</script>
+
+</body>
+
+</html>
